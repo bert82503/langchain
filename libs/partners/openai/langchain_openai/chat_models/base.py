@@ -29,16 +29,19 @@ from typing import (
 
 import openai
 import tiktoken
+# LLM运行回调
 from langchain_core.callbacks import (
     AsyncCallbackManagerForLLMRun,
     CallbackManagerForLLMRun,
 )
+# 大语言模型
 from langchain_core.language_models import LanguageModelInput
 from langchain_core.language_models.chat_models import (
     BaseChatModel,
     agenerate_from_stream,
     generate_from_stream,
 )
+# 消息
 from langchain_core.messages import (
     AIMessage,
     AIMessageChunk,
@@ -57,6 +60,7 @@ from langchain_core.messages import (
     ToolMessage,
     ToolMessageChunk,
 )
+# 输出解析器
 from langchain_core.output_parsers import (
     JsonOutputParser,
     PydanticOutputParser,
@@ -291,37 +295,39 @@ class _AllReturnType(TypedDict):
     parsing_error: Optional[BaseException]
 
 
+# 基础的聊天大语言模型API
 class BaseChatOpenAI(BaseChatModel):
     client: Any = Field(default=None, exclude=True)  #: :meta private:
     async_client: Any = Field(default=None, exclude=True)  #: :meta private:
     model_name: str = Field(default="gpt-3.5-turbo", alias="model")
-    """Model name to use."""
+    """Model name to use. 模型名称"""
     temperature: float = 0.7
-    """What sampling temperature to use."""
+    """What sampling temperature to use. 采样温度"""
     model_kwargs: Dict[str, Any] = Field(default_factory=dict)
     """Holds any model parameters valid for `create` call not explicitly specified."""
     openai_api_key: Optional[SecretStr] = Field(default=None, alias="api_key")
     """Automatically inferred from env var `OPENAI_API_KEY` if not provided."""
     openai_api_base: Optional[str] = Field(default=None, alias="base_url")
     """Base URL path for API requests, leave blank if not using a proxy or service 
-        emulator."""
+        emulator. API请求的基本URL路径"""
     openai_organization: Optional[str] = Field(default=None, alias="organization")
-    """Automatically inferred from env var `OPENAI_ORG_ID` if not provided."""
+    """Automatically inferred from env var `OPENAI_ORG_ID` if not provided. 组织身份"""
     # to support explicit proxy for OpenAI
     openai_proxy: Optional[str] = None
+    """代理"""
     request_timeout: Union[float, Tuple[float, float], Any, None] = Field(
         default=None, alias="timeout"
     )
     """Timeout for requests to OpenAI completion API. Can be float, httpx.Timeout or 
-        None."""
+        None. 请求超时时间"""
     max_retries: int = 2
-    """Maximum number of retries to make when generating."""
+    """Maximum number of retries to make when generating. 生成时要进行的最大重试次数"""
     streaming: bool = False
-    """Whether to stream the results or not."""
+    """Whether to stream the results or not. 是否流式传输结果"""
     n: int = 1
-    """Number of chat completions to generate for each prompt."""
+    """Number of chat completions to generate for each prompt. 为每个提示词生成的聊天完成次数"""
     max_tokens: Optional[int] = None
-    """Maximum number of tokens to generate."""
+    """Maximum number of tokens to generate. 要生成的最大字数"""
     tiktoken_model_name: Optional[str] = None
     """The model name to pass to tiktoken when using this class. 
     Tiktoken is used to count the number of tokens in documents to constrain 
@@ -339,10 +345,13 @@ class BaseChatOpenAI(BaseChatModel):
     http_client: Union[Any, None] = None
     """Optional httpx.Client. Only used for sync invocations. Must specify 
         http_async_client as well if you'd like a custom client for async invocations.
+        同步调用客户端
     """
     http_async_client: Union[Any, None] = None
     """Optional httpx.AsyncClient. Only used for async invocations. Must specify 
-        http_client as well if you'd like a custom client for sync invocations."""
+        http_client as well if you'd like a custom client for sync invocations.
+        异步调用客户端
+    """
 
     class Config:
         """Configuration for this pydantic object."""
@@ -379,6 +388,7 @@ class BaseChatOpenAI(BaseChatModel):
         values["openai_api_base"] = values["openai_api_base"] or os.getenv(
             "OPENAI_API_BASE"
         )
+        # 代理
         values["openai_proxy"] = get_from_dict_or_env(
             values,
             "openai_proxy",
@@ -386,6 +396,7 @@ class BaseChatOpenAI(BaseChatModel):
             default="",
         )
 
+        # 客户端入参
         client_params = {
             "api_key": (
                 values["openai_api_key"].get_secret_value()
@@ -410,8 +421,11 @@ class BaseChatOpenAI(BaseChatModel):
                         "Could not import httpx python package. "
                         "Please install it with `pip install httpx`."
                     ) from e
+                # 同步地聊天对话
                 values["http_client"] = httpx.Client(proxy=openai_proxy)
+            # HTTP同步客户端
             sync_specific = {"http_client": values["http_client"]}
+            # 同步API客户端
             values["client"] = openai.OpenAI(
                 **client_params, **sync_specific
             ).chat.completions
@@ -424,8 +438,11 @@ class BaseChatOpenAI(BaseChatModel):
                         "Could not import httpx python package. "
                         "Please install it with `pip install httpx`."
                     ) from e
+                # 异步地聊天对话
                 values["http_async_client"] = httpx.AsyncClient(proxy=openai_proxy)
+            # HTTP异步客户端
             async_specific = {"http_client": values["http_async_client"]}
+            # 异步API客户端
             values["async_client"] = openai.AsyncOpenAI(
                 **client_params, **async_specific
             ).chat.completions
@@ -1065,8 +1082,11 @@ class BaseChatOpenAI(BaseChatModel):
             return llm | output_parser
 
 
+# ChatOpenAI-聊天大语言模型API
+# ChatGpt-聊天对话
 class ChatOpenAI(BaseChatOpenAI):
     """`OpenAI` Chat large language models API.
+    聊天大语言模型API
 
     To use, you should have the environment variable ``OPENAI_API_KEY``
     set with your API key, or pass it as a named parameter to the constructor.
@@ -1088,7 +1108,8 @@ class ChatOpenAI(BaseChatOpenAI):
 
     @classmethod
     def get_lc_namespace(cls) -> List[str]:
-        """Get the namespace of the langchain object."""
+        """Get the namespace of the langchain object.
+        获取 langchain 对象的命名空间"""
         return ["langchain", "chat_models", "openai"]
 
     @property
